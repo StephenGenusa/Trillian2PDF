@@ -62,6 +62,7 @@ import requests
 
 _stylesheet = None
 user_name = ""
+buddy_dict = {}
 
 def stylesheet():
     """ Create the style sheet """
@@ -209,8 +210,8 @@ def parseAttrib(attr_name, attr_str):
         return ""
 
 def buildBuddyDict(buddy_path):
+    global buddy_dict
     buddy_files = [name for name in os.listdir(buddy_path) if name.lower().find("buddies") > -1]
-    buddy_dict = {}
     for buddy_file in buddy_files:
         with open(os.path.join(buddy_path, buddy_file)) as f:
             lines = f.read().splitlines()
@@ -232,9 +233,13 @@ def buildBuddyDict(buddy_path):
                         if buddy_name:
                             if buddy_email not in buddy_dict:
                                 buddy_dict[buddy_email] = buddy_name
-                            
-    return buddy_dict
 
+def GetUserFromDict(bd, id):
+    if id in bd:
+        return bd[id]
+    else:
+        return id
+    
 def maxSize(image, maxSize):
     """ im = maxSize(im, (maxSizeX, maxSizeY), method = Image.BICUBIC)
     Adapted from : https://mail.python.org/pipermail/image-sig/2006-January/003724.html
@@ -258,12 +263,12 @@ for user_dir in user_dirs:
     trillian_path = os.path.join(start_path, user_dir)
     #print "Trillian user path is", trillian_path
     
-    buddy_dict = buildBuddyDict(trillian_path)
+    buildBuddyDict(trillian_path)
     
     Story = []
     for person_group in ['Query', 'Channel']:
         astra_logs_path = os.path.join(trillian_path, "logs", "ASTRA", person_group)
-        astra_log_files = [name for name in os.listdir(astra_logs_path) if os.path.splitext(name)[-1].lower() == ".xml" and name.find("assets") == -1] #  and name.find("testval") > -1
+        astra_log_files = [name for name in os.listdir(astra_logs_path) if os.path.splitext(name)[-1].lower() == ".xml" and name.find("assets") == -1] #   and name.find("ann") > -1
         for cur_astra_log in astra_log_files:
             current_trillian_user = urllib.unquote(user_dir)
             cur_remote_user = cur_astra_log.replace(".xml", "")
@@ -291,7 +296,7 @@ for user_dir in user_dirs:
 
                             d = datetime.datetime.fromtimestamp(msg_time)
 
-                            user_name = buddy_dict[cur_remote_user]
+                            user_name = GetUserFromDict(buddy_dict, cur_remote_user)
                             
                             if not bol_printed_user:
                                 htext = "Trillian messages with " + user_name
@@ -308,13 +313,17 @@ for user_dir in user_dirs:
                                     sess_text = ""
                                 
                                 if msg_type in ["outgoing_privateMessage", "outgoing_groupMessage"]:
-                                    user_name = buddy_dict[current_trillian_user]
+                                    user_name = GetUserFromDict(buddy_dict, current_trillian_user)
                                 elif msg_type == "incoming_privateMessage":
-                                    user_name = buddy_dict[cur_remote_user]
+                                    user_name = GetUserFromDict(buddy_dict, cur_remote_user)
                                 elif msg_type == "incoming_groupMessage":
-                                    user_name = buddy_dict[msg_from]
+                                    user_name = GetUserFromDict(buddy_dict, msg_from)
                                     
                                 ptext = d.strftime('%I:%M%p') + " " + user_name + ": " + msg_text.replace("\n", "<br />").replace("</a>", "</a><br />")
+                                bs4obj = BeautifulSoup(ptext)
+                                ptext = bs4obj.prettify()
+                                if ptext.count("<a href") > ptext.count("</a>"):
+                                    ptext.replace("</a>", "</a></a>")
                                 Story.append(Paragraph(ptext, styles["Normal"]))
                                 msg_temp = strip_tags(msg_text)
                                 try:
